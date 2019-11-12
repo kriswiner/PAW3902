@@ -2,7 +2,7 @@
  *  
  *  Created by Kris Winer
  *  
- This sketch is to operate the 
+ This sketch is to operate the the PAw3902 optical flow sensor.
  
  The sketch uses default SPI pins on the Dragonfly development board.
 
