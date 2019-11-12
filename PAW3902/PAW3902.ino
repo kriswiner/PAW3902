@@ -2,11 +2,12 @@
  *  
  *  Created by Kris Winer
  *  
- This sketch is to operate the the PAw3902 optical flow sensor.
+ This sketch is to operate the PAw3902 optical flow sensor.
  
  The sketch uses default SPI pins on the Dragonfly development board.
 
- Sketch modeled after Bitcraze PMW3901 library-https://github.com/bitcraze/PMW3901
+ Sketch modeled after Bitcraze PMW3901 library-https://github.com/bitcraze/PMW3901 and
+ PixArt PAW3902 Arduino sketch
 
  Library may be used freely and without limit with attribution.
  
@@ -17,16 +18,16 @@
 // Pin definitions
 #define myLed  26  // blue led on Dragonfly
 #define CSPIN  10  // default chip select for SPI
+#define MOSI   11  // SPI MOSI pin on Dragonfly
 #define EN     31  // board enable is pulled up, set to TTL LOW to disable
 #define RST    21  // PAM3902 reset
 #define MOT    30  // use as data ready interrupt
 
-uint8_t mode = lowlight; // mode choices are bright, lowlight (default), superlowlight
-int16_t deltaX, deltaY;
+uint8_t mode = superlowlight; // mode choices are bright, lowlight (default), superlowlight
+int16_t deltaX, deltaY, Shutter;
 bool motionDetect = false, alarmFlag = false;
 uint8_t status;
-uint8_t dataArray[12], SQUAL;
-uint16_t Shutter;
+uint8_t dataArray[12], SQUAL, RawDataSum = 0,count = 0;
 
 PAW3902 opticalFlow(CSPIN); // Instantiate PAW3902
 
@@ -51,22 +52,20 @@ void setup() {
   digitalWrite(myLed, LOW);
 
   opticalFlow.begin();  // Prepare SPI port and restart device
-  opticalFlow.reset();  // Reset device
   
   // Check device ID as a test of SPI communications
   if (!opticalFlow.checkID()) {
   Serial.println("Initialization of the opticalFlow sensor failed");
   while(1) { }
-  
-  opticalFlow.setMode(mode); // set device mode
+  }
+
+  opticalFlow.setMode(mode);
 
   digitalWrite(myLed, HIGH);
-  }
 
   attachInterrupt(MOT, myIntHandler, FALLING); // active LOW 
   status = opticalFlow.status();  // clear interrupt before entering main loop
   /* end of setup */
-
 }
 
 void loop() {
@@ -75,17 +74,78 @@ void loop() {
   {
    motionDetect = false;
    
-   status = opticalFlow.status();
-   opticalFlow.readMotionCount(&deltaX, &deltaY, &SQUAL, &Shutter); 
-//   opticalFlow.readBurstMode(dataArray);
-//   deltaX = ((int16_t)dataArray[3] << 8) | dataArray[2];
-//   deltaY = ((int16_t)dataArray[5] << 8) | dataArray[4];
-//   SQUAL = dataArray[6];
-//   Shutter = (uint16_t)((dataArray[11] & 0x1F) << 8) | dataArray[10];
+//   status = opticalFlow.status();
+//   opticalFlow.readMotionCount(&deltaX, &deltaY, &SQUAL, &Shutter); 
+
+   opticalFlow.readBurstMode(dataArray);
+   deltaX = ((int16_t)dataArray[3] << 8) | dataArray[2];
+   deltaY = ((int16_t)dataArray[5] << 8) | dataArray[4];
+   SQUAL = dataArray[6];
+   RawDataSum = dataArray[7];
+   Shutter = ((uint16_t)dataArray[11] << 8) | dataArray[10];
+   Shutter &= 0x1FFF;
+
+   mode =    opticalFlow.getMode();
+   // Don't report data if under thresholds
+   if((mode == bright       ) && (SQUAL < 25) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0.;
+   if((mode == lowlight     ) && (SQUAL < 70) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0.;
+   if((mode == superlowlight) && (SQUAL < 85) && (Shutter >= 0x0BC0)) deltaX = deltaY = 0.;
+
+   // Switch brightness modes automagically
+
+   // switch from lowlight to bright when shutter value < 3000 for 10 iterations
+   if((mode == lowlight) && (Shutter < 0x0BB8))
+   {
+       count++;
+       if(count >= 10) opticalFlow.setMode(bright);
+   }
+   else 
+   {
+       count = 0;
+   }
+
+
+   // switch from superlowlight to lowlight when shutter value < 1000 for ten iterations
+   if((mode == superlowlight) && (Shutter < 0x03E8))
+   {
+       count++;
+       if(count >= 10) opticalFlow.setMode(lowlight);
+   }
+   else 
+   {
+       count = 0;
+   }
+
+   // switch from bright to lowlight when shutter value >= 8190 for ten iterations
+   if((mode == bright) && (Shutter >= 0x1FFE) && (RawDataSum < 0x3C))
+   {
+       count++;
+       if(count >= 10) opticalFlow.setMode(lowlight);
+   }
+   else 
+   {
+       count = 0;
+   }
+
+   // switch from lowlight to superlowlight when shutter value >= 8190 for ten iterations
+   if((mode == lowlight) && (Shutter >= 0x1FFE) && (RawDataSum < 0x5A))
+   {
+       count++;
+       if(count >= 10) opticalFlow.setMode(superlowlight);
+   }
+   else 
+   {
+       count = 0;
+   }
+   
+   // Drop out of superlowlight mode as soon as the Shutter less than 500
+   if((mode == superlowlight) && (Shutter < 0x01F4)) opticalFlow.setMode(lowlight);
+   
    Serial.print("X: ");Serial.print(deltaX);Serial.print(", Y: ");Serial.println(deltaY);
-   Serial.print("SQUAL: 0x");Serial.print(SQUAL, HEX);Serial.print(", Shutter: 0x");Serial.println(Shutter & 0x1FFF, HEX);
+   Serial.print("SQUAL: ");Serial.print(SQUAL);Serial.print(", Shutter: 0x");Serial.println(Shutter, HEX);
+   Serial.print("RawDataSum: 0x");Serial.print(RawDataSum, HEX);Serial.print(", mode: ");Serial.println(mode); 
   }
-  delay(100);
+  delay(50); // report at 20 Hz
   }
 
 
