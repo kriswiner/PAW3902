@@ -27,25 +27,28 @@
 
 #include <stdint.h>
 
-#define bright        1
-#define lowlight      2
-#define superlowlight 3
+#define bright        0
+#define lowlight      1
+#define superlowlight 2
 
 class PAW3902 {
 public:
   PAW3902(uint8_t cspin);
   boolean begin(void);
   uint8_t status();
+  void initRegisters(uint8_t mode);
   void readMotionCount(int16_t *deltaX, int16_t *deltaY, uint8_t *SQUAL, uint16_t *Shutter);
   void readBurstMode(uint8_t * dataArray); 
   boolean checkID();
   void setMode(uint8_t mode);
   void reset();
   void shutdown();
+  uint8_t getMode();
 
 private:
-  uint8_t _cs;
+  uint8_t _cs, _mode;
   void writeByte(uint8_t reg, uint8_t value);
+  void writeByteDelay(uint8_t reg, uint8_t value);
   uint8_t readByte(uint8_t reg);
   void initBright(void);
   void initLowLight(void);
