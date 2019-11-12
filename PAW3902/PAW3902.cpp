@@ -31,7 +31,7 @@ PAW3902::PAW3902(uint8_t cspin)
 boolean PAW3902::begin(void) 
 {
   // Setup SPI port
-  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0)); // 2 MHz max SPI clock frequency
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3)); // 2 MHz max SPI clock frequency
 
   // Make sure the SPI bus is reset
   digitalWrite(_cs, HIGH);
@@ -121,7 +121,7 @@ void PAW3902::readMotionCount(int16_t *deltaX, int16_t *deltaY, uint8_t *SQUAL, 
 
 void PAW3902::readBurstMode(uint8_t * dataArray)
 {
-  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
   digitalWrite(_cs, LOW);
   delayMicroseconds(150);
   SPI.transfer(0x16); // start burst mode
@@ -139,7 +139,7 @@ void PAW3902::readBurstMode(uint8_t * dataArray)
 void PAW3902::writeByte(uint8_t reg, uint8_t value) {
   reg |= 0x80u;
 
-  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE0));
+  SPI.beginTransaction(SPISettings(2000000, MSBFIRST, SPI_MODE3));
   digitalWrite(_cs, LOW);
   delayMicroseconds(50);
   SPI.transfer(reg);
