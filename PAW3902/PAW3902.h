@@ -44,6 +44,9 @@ public:
   void reset();
   void shutdown();
   uint8_t getMode();
+  void enterFrameCaptureMode();
+  uint8_t captureFrame(uint8_t * frameArray);
+  void exitFrameCaptureMode();
 
 private:
   uint8_t _cs, _mode;
