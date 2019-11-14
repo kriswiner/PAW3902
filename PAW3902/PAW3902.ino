@@ -23,11 +23,12 @@
 #define RST    21  // PAM3902 reset
 #define MOT    30  // use as data ready interrupt
 
-uint8_t mode = superlowlight; // mode choices are bright, lowlight (default), superlowlight
+uint8_t mode = bright; // mode choices are bright, lowlight (default), superlowlight
 int16_t deltaX, deltaY, Shutter;
 bool motionDetect = false, alarmFlag = false;
 uint8_t status;
-uint8_t dataArray[12], SQUAL, RawDataSum = 0,count = 0;
+uint8_t frameArray[1225], dataArray[12], SQUAL, RawDataSum = 0;
+uint8_t count0 = 0, count1 = 0, count2 = 0, count3 = 0, iterations = 0;
 
 PAW3902 opticalFlow(CSPIN); // Instantiate PAW3902
 
@@ -41,6 +42,9 @@ void setup() {
   digitalWrite(myLed, HIGH); // start with led off since active LOW on Dragonfly
 
   pinMode(MOT, INPUT); // data ready interrupt
+
+  pinMode(RST, OUTPUT);
+  digitalWrite(RST, HIGH);
 
   // Configure SPI Flash chip select
   pinMode(CSPIN, OUTPUT);
@@ -70,9 +74,11 @@ void setup() {
 
 void loop() {
   
+  // Navigation
   if(motionDetect)
   {
    motionDetect = false;
+   iterations++;
    
 //   status = opticalFlow.status();
 //   opticalFlow.readMotionCount(&deltaX, &deltaY, &SQUAL, &Shutter); 
@@ -87,55 +93,54 @@ void loop() {
 
    mode =    opticalFlow.getMode();
    // Don't report data if under thresholds
-   if((mode == bright       ) && (SQUAL < 25) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0.;
-   if((mode == lowlight     ) && (SQUAL < 70) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0.;
-   if((mode == superlowlight) && (SQUAL < 85) && (Shutter >= 0x0BC0)) deltaX = deltaY = 0.;
+   if((mode == bright       ) && (SQUAL < 25) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0;
+   if((mode == lowlight     ) && (SQUAL < 70) && (Shutter >= 0x1FF0)) deltaX = deltaY = 0;
+   if((mode == superlowlight) && (SQUAL < 85) && (Shutter >= 0x0BC0)) deltaX = deltaY = 0;
 
    // Switch brightness modes automagically
 
    // switch from lowlight to bright when shutter value < 3000 for 10 iterations
    if((mode == lowlight) && (Shutter < 0x0BB8))
    {
-       count++;
-       if(count >= 10) opticalFlow.setMode(bright);
+       count0++;
+       if(count0 >= 10) opticalFlow.setMode(bright);
    }
    else 
    {
-       count = 0;
+       count0 = 0;
    }
-
 
    // switch from superlowlight to lowlight when shutter value < 1000 for ten iterations
    if((mode == superlowlight) && (Shutter < 0x03E8))
    {
-       count++;
-       if(count >= 10) opticalFlow.setMode(lowlight);
+       count1++;
+       if(count1 >= 10) opticalFlow.setMode(lowlight);
    }
    else 
    {
-       count = 0;
+       count1 = 0;
    }
 
-   // switch from bright to lowlight when shutter value >= 8190 for ten iterations
-   if((mode == bright) && (Shutter >= 0x1FFE) && (RawDataSum < 0x3C))
+   // switch from bright to lowlight when shutter value >= 7711 for ten iterations
+   if((mode == bright) && (Shutter >= 0x1E1F) && (RawDataSum < 0x3C))
    {
-       count++;
-       if(count >= 10) opticalFlow.setMode(lowlight);
+       count2++;
+       if(count2 >= 10) opticalFlow.setMode(lowlight);
    }
    else 
    {
-       count = 0;
+       count2 = 0;
    }
 
-   // switch from lowlight to superlowlight when shutter value >= 8190 for ten iterations
-   if((mode == lowlight) && (Shutter >= 0x1FFE) && (RawDataSum < 0x5A))
+   // switch from lowlight to superlowlight when shutter value >= 7711 for ten iterations
+   if((mode == lowlight) && (Shutter >= 0x1E1F) && (RawDataSum < 0x5A))
    {
-       count++;
-       if(count >= 10) opticalFlow.setMode(superlowlight);
+       count3++;
+       if(count3 >= 10) opticalFlow.setMode(superlowlight);
    }
    else 
    {
-       count = 0;
+       count3 = 0;
    }
    
    // Drop out of superlowlight mode as soon as the Shutter less than 500
@@ -145,8 +150,39 @@ void loop() {
    Serial.print("SQUAL: ");Serial.print(SQUAL);Serial.print(", Shutter: 0x");Serial.println(Shutter, HEX);
    Serial.print("RawDataSum: 0x");Serial.print(RawDataSum, HEX);Serial.print(", mode: ");Serial.println(mode); 
   }
-  delay(50); // report at 20 Hz
+
+  // Frame capture
+  if(iterations >= 25) // capture one frame per 25 iterations of navigation
+  {
+    iterations = 0;
+    Serial.println("Hold camera still for frame capture!");
+    delay(4000);
+    
+    opticalFlow.enterFrameCaptureMode();
+    
+    for(uint8_t kk = 0; kk < 5; kk++) // capture 5 frames then go back to navigating
+    {
+      opticalFlow.captureFrame(frameArray);
+      for(uint8_t ii = 0; ii < 35; ii++) // plot the frame data on the serial monitor (TFT display would be better)
+      {
+        Serial.print(ii); Serial.print(" "); 
+        for(uint8_t jj = 0; jj < 35; jj++)
+        {
+        Serial.print(frameArray[ii*35 + jj]); Serial.print(" ");
+        }
+        Serial.println(" ");
+      }
+      Serial.println(" ");
+    }
+  
+    opticalFlow.exitFrameCaptureMode(); // exit fram capture mode
+    digitalWrite(RST, LOW); delay(10); digitalWrite(RST, HIGH); // toggle reset to return to navigation mode
+    Serial.println("Back in Navigation mode!");
   }
+
+  delay(100); // report at 10 Hz
+  
+} // end of main loop
 
 
 void myIntHandler()
