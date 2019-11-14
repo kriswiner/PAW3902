@@ -206,6 +206,60 @@ uint8_t PAW3902::readByte(uint8_t reg)
 }
 
 
+void PAW3902::enterFrameCaptureMode()
+{
+  setMode(lowlight); // make sure not in superlowlight mode for frame capture
+  
+  writeByteDelay(0x7F, 0x07);
+  writeByteDelay(0x41, 0x1D);
+  writeByteDelay(0x4C, 0x00);
+  writeByteDelay(0x7F, 0x08);
+  writeByteDelay(0x6A, 0x38);
+  writeByteDelay(0x7F, 0x00);
+  writeByteDelay(0x55, 0x04);
+  writeByteDelay(0x40, 0x80);
+  writeByteDelay(0x4D, 0x11);
+  delay(1);
+}
+
+  
+uint8_t PAW3902::captureFrame(uint8_t * frameArray)
+{
+  uint8_t rawDataUpper = 0, rawDataLower = 0;
+  
+  writeByteDelay(0x7F, 0x00);
+  writeByteDelay(0x58, 0xFF); // start frame capture mode
+  
+  for(uint8_t ii = 0; ii < 35; ii++)
+  {
+    for(uint8_t jj = 0; jj < 35; jj++)
+    {
+      rawDataUpper = readByte(0x58);
+      while( (rawDataUpper & 0xC0) != 0x40 ) { rawDataUpper = readByte(0x58); } // wait for upper six bits of raw data to be valid
+      rawDataLower = readByte(0x58);
+      while( (rawDataLower & 0xC0) != 0x80 ) { rawDataLower = readByte(0x58); } // wait for lower two bits of raw data to be valid
+      frameArray[ii*35 + jj] = (rawDataUpper & 0x3F) << 2 | (rawDataLower & 0x0C) >> 2;
+    }
+  }
+
+}
+
+
+void PAW3902::exitFrameCaptureMode()
+{
+  writeByteDelay(0x7F, 0x00);
+  writeByteDelay(0x4D, 0x11);
+  writeByteDelay(0x40, 0x80);
+  writeByteDelay(0x55, 0x80);
+  writeByteDelay(0x7F, 0x08);
+  writeByteDelay(0x6A, 0x18);
+  writeByteDelay(0x7F, 0x07);
+  writeByteDelay(0x41, 0x0D);
+  writeByteDelay(0x4C, 0x80);
+  writeByteDelay(0x7F, 0x00);
+}
+
+
 // Performance optimization registers for the three different modes
 void PAW3902::initBright()
 {
