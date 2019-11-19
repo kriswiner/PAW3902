@@ -41,6 +41,8 @@ boolean PAW3902::begin(void)
   digitalWrite(_cs, HIGH);
   delay(1);
 
+  SPI.endTransaction();
+
   reset();
 
   // Reading the motion registers one time
@@ -52,8 +54,6 @@ boolean PAW3902::begin(void)
 
   _mode = lowlight;
   setMode(lowlight); // set mode to lowlight as default
-
-  SPI.endTransaction();
 }
 
 
