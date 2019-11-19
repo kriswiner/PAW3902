@@ -160,7 +160,6 @@ void PAW3902::readBurstMode(uint8_t * dataArray)
   delayMicroseconds(1);
   
   SPI.endTransaction();
-  
 }
 
 
