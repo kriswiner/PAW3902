@@ -88,7 +88,7 @@ void loop() {
    deltaY = ((int16_t)dataArray[5] << 8) | dataArray[4];
    SQUAL = dataArray[6];
    RawDataSum = dataArray[7];
-   Shutter = ((uint16_t)dataArray[11] << 8) | dataArray[10];
+   Shutter = ((uint16_t)dataArray[10] << 8) | dataArray[11];
    Shutter &= 0x1FFF;
 
    mode =    opticalFlow.getMode();
